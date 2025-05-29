@@ -17,6 +17,7 @@ BaaS backend as a service
 - Cost can fluctuate if not carefully managed, since its a pay for what you use model if a new feature has too many queries it can balloon out of control
 - Difficulty in implementing custom analytics
 # Day 1 Skeleton
-Added login page, and 3 tabs, goals, history, settings
+- Added login page, and 3 tabs, goals, history, settings
+- Initalized firebase project and added a webapp following this [link](https://docs.expo.dev/guides/using-firebase/)
 
 
