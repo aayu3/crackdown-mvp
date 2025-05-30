@@ -10,7 +10,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 // Inner component that has access to AuthContext
 function AppNavigator() {
   const colorScheme = useColorScheme();
-  const { loggedIn } = useAuth();
+  const { loggedIn, loading } = useAuth();
   const router = useRouter();
 
   const [loaded] = useFonts({
@@ -26,26 +26,21 @@ function AppNavigator() {
 
 
   useEffect(() => {
-    if (loaded) {
-          if (!loggedIn) {
-            router.replace('/(auth)/login');
-          }
+    if (loaded && !loading && !loggedIn) {
+      router.replace('/(auth)/login');
     }
 
-  }, [loggedIn]);
-  // Keep splash visible until fonts are ready
-  if (!loaded) {
+  }, [loggedIn, loaded, loading, router]);
+
+  if (!loaded || loading) {
     return null;
   }
 
-   
-
-  // Main app navigation for authenticated users
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
