@@ -7,20 +7,48 @@ import {
 } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { auth } from '../../firebaseConfig'; // Adjust the import based on your Firebase config file
+import { goalService } from '../services/goalsService';
+import { UserProfile } from '../types/goals'; // Updated import
 import AuthContextType from './AuthContextInterface'; // Import the interface for type safety
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const loadUserProfile = async (firebaseUser: User | null) => {
+    if (firebaseUser) {
+      try {
+        let profile = await goalService.getUserProfile(firebaseUser.uid);
+        
+        // Create profile if it doesn't exist
+        if (!profile) {
+          await goalService.createUserProfile(firebaseUser.uid, {
+            email: firebaseUser.email || '',
+            display_name: firebaseUser.displayName || 'User',
+          });
+          profile = await goalService.getUserProfile(firebaseUser.uid);
+        }
+        
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+        setUserProfile(null);
+      }
+    } else {
+      setUserProfile(null);
+    }
+  };
 
   // Listen for authentication state changes
   useEffect(() => {
     console.log('Setting up auth state listener');
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log('Auth state changed:', { user: !!firebaseUser, email: firebaseUser?.email });
       setUser(firebaseUser);
+      await loadUserProfile(firebaseUser);
       setLoading(false);
     });
 
@@ -38,10 +66,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const register = useMemo(() => async (email: string, password: string) => {
+  const register = useMemo(() => async (email: string, password: string, displayName?: string) => {
     try {
       console.log('Attempting registration for:', email);
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Create user profile immediately after registration
+      await goalService.createUserProfile(userCredential.user.uid, {
+        email: email,
+        display_name: displayName || 'User',
+      });
+      
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -58,17 +93,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const refreshProfile = useMemo(() => async () => {
+    if (user) {
+      await loadUserProfile(user);
+    }
+  }, [user]);
+
   // Memoize the context value to prevent unnecessary re-renders
   const value = useMemo<AuthContextType>(() => ({
     loggedIn: !!user,
     user,
-    username: user?.displayName || null,
+    userProfile,
+    username: userProfile?.display_name || user?.displayName || null,
     email: user?.email || null,
     loading,
     login,
     register,
     logout,
-  }), [user, loading, login, register, logout]);
+    refreshProfile
+  }), [user, userProfile, loading, login, register, logout, refreshProfile]);
 
   console.log('AuthProvider providing value:', { loggedIn: !!user, loading });
 
