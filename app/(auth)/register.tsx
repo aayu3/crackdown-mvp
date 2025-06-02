@@ -14,141 +14,154 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 export default function RegisterScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
-  const router = useRouter();
+    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const { register } = useAuth();
+    const router = useRouter();
 
-  const validateForm = () => {
-    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return false;
-    }
+    const validateForm = () => {
+        if (!email.trim() || !password.trim() || !confirmPassword.trim() || !username.trim()) {
+        Alert.alert('Error', 'Please fill in all fields');
+        return false;
+        }
 
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return false;
-    }
+        if (password !== confirmPassword) {
+        Alert.alert('Error', 'Passwords do not match');
+        return false;
+        }
 
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return false;
-    }
+        if (password.length < 6) {
+        Alert.alert('Error', 'Password must be at least 6 characters long');
+        return false;
+        }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return false;
-    }
+        if (username.length < 1 || username.length > 20) {
+        Alert.alert('Error', 'Username must be between 1 and 20 characters long');
+        return false;
+        }
 
-    return true;
-  };
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+        Alert.alert('Error', 'Please enter a valid email address');
+        return false;
+        }
 
-  const handleRegister = async () => {
-    if (!validateForm()) return;
+        return true;
+    };
 
-    setLoading(true);
-    try {
-      await register(email.trim(), password);
-      // Navigation will happen automatically via auth state change
-      Alert.alert('Success', 'Account created successfully!');
-    } catch (error: any) {
-      console.error('Registration failed:', error);
-      
-      // Handle specific Firebase errors
-      let errorMessage = 'Registration failed. Please try again.';
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'An account with this email already exists.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak. Please choose a stronger password.';
-      } else if (error.code === 'auth/operation-not-allowed') {
-        errorMessage = 'Email/password accounts are not enabled.';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your connection.';
-      }
-      
-      Alert.alert('Registration Failed', errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleRegister = async () => {
+        if (!validateForm()) return;
 
-  const navigateToLogin = () => {
-    router.push('/(auth)/login');
-  };
+        setLoading(true);
+        try {
+        await register(username.trim(), email.trim(), password);
+        // Navigation will happen automatically via auth state change
+        Alert.alert('Success', 'Account created successfully!');
+        } catch (error: any) {
+        console.error('Registration failed:', error);
+        
+        // Handle specific Firebase errors
+        let errorMessage = 'Registration failed. Please try again.';
+        if (error.code === 'auth/email-already-in-use') {
+            errorMessage = 'An account with this email already exists.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+        } else if (error.code === 'auth/weak-password') {
+            errorMessage = 'Password is too weak. Please choose a stronger password.';
+        } else if (error.code === 'auth/operation-not-allowed') {
+            errorMessage = 'Email/password accounts are not enabled.';
+        } else if (error.code === 'auth/network-request-failed') {
+            errorMessage = 'Network error. Please check your connection.';
+        }
+        
+        Alert.alert('Registration Failed', errorMessage);
+        } finally {
+        setLoading(false);
+        }
+    };
 
-  return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.form}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join us today</Text>
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Email Address"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="new-password"
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="new-password"
-          />
-          
-          <Text style={styles.passwordHint}>
-            Password must be at least 6 characters long
-          </Text>
-          
-          <TouchableOpacity 
-            style={[styles.button, loading && styles.buttonDisabled]} 
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              {loading ? 'Creating Account...' : 'Create Account'}
+    const navigateToLogin = () => {
+        router.push('/(auth)/login');
+    };
+
+    return (
+        <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+        <ScrollView 
+            contentContainerStyle={styles.scrollContainer}
+            keyboardShouldPersistTaps="handled"
+        >
+            <View style={styles.form}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Join us today</Text>
+
+            <TextInput
+                style={styles.input}
+                placeholder="Username"
+                value={username}
+                onChangeText={setUsername}
+                autoCorrect={false}
+            />
+            
+            <TextInput
+                style={styles.input}
+                placeholder="Email Address"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+            />
+            
+            <TextInput
+                style={styles.input}
+                placeholder="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                autoComplete="new-password"
+            />
+            
+            <TextInput
+                style={styles.input}
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                autoComplete="new-password"
+            />
+            
+            <Text style={styles.passwordHint}>
+                Password must be at least 6 characters long
             </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={navigateToLogin}>
-            <Text style={styles.linkText}>
-              Already have an account? Sign In
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
+            
+            <TouchableOpacity 
+                style={[styles.button, loading && styles.buttonDisabled]} 
+                onPress={handleRegister}
+                disabled={loading}
+            >
+                <Text style={styles.buttonText}>
+                {loading ? 'Creating Account...' : 'Create Account'}
+                </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity onPress={navigateToLogin}>
+                <Text style={styles.linkText}>
+                Already have an account? Sign In
+                </Text>
+            </TouchableOpacity>
+            </View>
+        </ScrollView>
+        </KeyboardAvoidingView>
+    );
 }
 
 const styles = StyleSheet.create({

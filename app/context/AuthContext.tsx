@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const register = useMemo(() => async (email: string, password: string, displayName?: string) => {
+  const register = useMemo(() => async (username:string, email: string, password: string) => {
     try {
       console.log('Attempting registration for:', email);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -74,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Create user profile immediately after registration
       await goalService.createUserProfile(userCredential.user.uid, {
         email: email,
-        display_name: displayName || 'User',
+        display_name: username || 'User',
       });
       
     } catch (error) {
