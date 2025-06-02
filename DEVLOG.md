@@ -19,5 +19,7 @@ BaaS backend as a service
 # Day 1 Skeleton
 - Added login page, and 3 tabs, goals, history, settings
 - Initalized firebase project and added a webapp following this [link](https://docs.expo.dev/guides/using-firebase/)
-
-
+- Added email login feature using firebase
+# Day 2 Basic Features
+Added userprofile document to firebase and two simple goals, a task based and
+ 
