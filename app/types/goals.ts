@@ -1,126 +1,183 @@
-// app/types/goals.ts
-
+// app/types/goal.ts
 import { Timestamp } from 'firebase/firestore';
 
-// Base interface for all documents
-export interface BaseDocument {
+// Goal Type - extensible for future types
+export type GoalType = 'task' | 'incremental';
+
+// Days of the week (0 = Sunday, 6 = Saturday)
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+// Notification frequency for individual goals
+export type GoalNotificationFrequency = 0 | 1 | 2 | 3;
+
+// Goal Document (stored in Firestore)
+export interface Goal {
+  // Firestore document ID (not stored in document itself)
   id: string;
-  created_at: Timestamp;
-  updated_at: Timestamp;
-  created_by: string;
-}
-
-// Goal Types
-export type GoalType = 'reminder' | 'counter';
-
-export type GoalStatus = 'active' | 'completed' | 'paused';
-
-// Flexible Goal Document
-export interface Goal extends BaseDocument {
+  
+  // User reference
   user_id: string;
-  title: string;
-  description?: string;
-  type: GoalType;
-  status: GoalStatus;
   
-  // For reminder goals: just track if completed today
-  // For counter goals: track progress toward daily target
-  daily_target: number | null; // Only for counter goals (e.g., 8 glasses, 5 stretches)
-  current_count: number; // Today's progress (0 for reminders, count for counters)
+  // Basic goal info
+  goal_name: string;
+  goal_type: GoalType;
+  target_count: number | null; // For incremental goals, daily target (null for task goals)
+  active: boolean; // Is goal currently active
+  icon: string | null; // Emoji/icon for UI (default null for simplicity)
   
-  // Tracking
-  date_created: string; // "YYYY-MM-DD" when goal was created
-  last_completed?: Timestamp; // When last marked complete/incremented
-  last_reset: Timestamp; // When daily counter was last reset
+  // Scheduling
+  created_date: Timestamp;
+  repeat: DayOfWeek[]; // e.g., [1, 2, 3, 4, 5] for weekdays
   
-  // Weekly tracking
-  weekly_completions: number; // Days this week the goal was completed
-  total_completions: number; // All-time days completed
+  // Progress tracking
+  goal_streak: number;
+  total_completions: number;
   
-  // Settings
-  reminder_time?: string; // "09:00" format for daily reminder
-  icon?: string; // Emoji or icon identifier
-  color?: string; // Hex color for UI
+  // Daily state (resets based on date)
+  day_count: number; // For incremental goals
+  completed: boolean; // For task goals or when incremental target reached
+  last_day_completed: Timestamp | null; // null if never completed
   
-  // Metadata for extensibility
-  metadata?: Record<string, any>;
+  // Notification settings
+  daily_reminders: GoalNotificationFrequency; // 0-3 reminders per day for this specific goal
+  reminders: string[]; // Pregenerated reminder messages (length matches daily_reminders)
 }
 
-// Daily Log Entry - when user completes/increments a goal
-export interface GoalLog extends BaseDocument {
-  user_id: string;
-  goal_id: string;
-  goal_title: string; // Denormalized for easier querying
-  
-  // What happened
-  action_type: 'complete' | 'increment'; // Complete for reminders, increment for counters
-  increment_amount?: number; // For counter goals (default 1)
-  note?: string;
-  
-  // When
-  timestamp: Timestamp;
-  date_string: string; // "YYYY-MM-DD" for easy daily querying
+// Helper type for notification scheduling
+export interface GoalNotificationTimes {
+  hour: number;
+  minute: number;
+  label: string;
 }
 
-// User Profile with Goal Metrics
-export interface UserProfile extends BaseDocument {
-  // Basic Info
-  email: string;
-  display_name: string;
-  //avatar_url?: string;
+// Notification schedule configurations for goals
+export const GOAL_NOTIFICATION_SCHEDULES: Record<GoalNotificationFrequency, GoalNotificationTimes[]> = {
+  0: [], // No notifications for this goal
+  1: [
+    { hour: 12, minute: 0, label: 'Midday Check-in' }
+  ],
+  2: [
+    { hour: 10, minute: 0, label: 'Morning Motivation' },
+    { hour: 15, minute: 0, label: 'Afternoon Push' }
+  ],
+  3: [
+    { hour: 9, minute: 0, label: 'Morning Start' },
+    { hour: 12, minute: 0, label: 'Midday Check-in' },
+    { hour: 16, minute: 0, label: 'Afternoon Finish' }
+  ]
+};
+
+// Helper function to get notification times for a goal's frequency
+export const getGoalNotificationTimes = (frequency: GoalNotificationFrequency): GoalNotificationTimes[] => {
+  return GOAL_NOTIFICATION_SCHEDULES[frequency] || [];
+};
+
+// Helper function to get frequency description for goals
+export const getGoalFrequencyDescription = (frequency: GoalNotificationFrequency): string => {
+  switch (frequency) {
+    case 0:
+      return 'No reminders';
+    case 1:
+      return '1 reminder per day (12 PM)';
+    case 2:
+      return '2 reminders per day (10 AM, 3 PM)';
+    case 3:
+      return '3 reminders per day (9 AM, 12 PM, 4 PM)';
+    default:
+      return 'Unknown';
+  }
+};
+
+// Helper function to generate goal-specific notification messages
+export const generateGoalNotificationMessage = (
+  goalName: string, 
+  goalType: GoalType, 
+  targetCount: number | null, 
+  timeLabel: string
+): string => {
+  const goalEmoji = goalType === 'task' ? '✅' : '📊';
   
-  // Goal Metrics - All Time
-  total_goals_created: number;
-  total_goals_completed: number; // Goals that reached their daily target
-  total_actions_logged: number; // Total increments/completions across all goals
-  
-  // Goal Metrics - This Week
-  weekly_goals_completed: number; // Goals completed this week
-  weekly_actions_logged: number; // Actions logged this week
-  current_weekly_streak: number; // Consecutive days with at least one goal completed
-  best_weekly_streak: number; // Best weekly streak ever
-  
-  // Tracking
-  last_weekly_reset: Timestamp;
-  last_active: Timestamp;
-  
-  // Settings
-  preferences: {
-    notifications_enabled: boolean;
-    default_reminder_time: string; // "09:00"
-    timezone: string;
+  // Simple message templates - could be replaced with AI-generated ones later
+  const templates = {
+    morning: [
+      `${goalEmoji} Ready to tackle "${goalName}" today?`,
+      `${goalEmoji} Morning! Time to work on "${goalName}"`,
+      `${goalEmoji} Start strong with "${goalName}" today!`,
+    ],
+    midday: [
+      `${goalEmoji} How's "${goalName}" going today?`,
+      `${goalEmoji} Midday check: "${goalName}" progress time!`,
+      `${goalEmoji} Half the day done - how about "${goalName}"?`,
+    ],
+    afternoon: [
+      `${goalEmoji} Final push for "${goalName}" today!`,
+      `${goalEmoji} Don't forget about "${goalName}" before evening!`,
+      `${goalEmoji} Last chance to nail "${goalName}" today!`,
+    ]
   };
-}
-
-// Weekly Leaderboard Entry
-export interface LeaderboardEntry {
-  user_id: string;
-  display_name: string;
-  avatar_url?: string;
   
-  // This week's stats
-  goals_completed: number; // Number of goals that hit their daily target this week
-  total_actions: number; // Total actions/increments this week
-  active_days: number; // Days this week they logged any activity
+  // Determine time category
+  let timeCategory: keyof typeof templates = 'midday';
+  if (timeLabel.toLowerCase().includes('morning') || timeLabel.toLowerCase().includes('start')) {
+    timeCategory = 'morning';
+  } else if (timeLabel.toLowerCase().includes('afternoon') || timeLabel.toLowerCase().includes('finish') || timeLabel.toLowerCase().includes('push')) {
+    timeCategory = 'afternoon';
+  }
   
-  // Ranking
-  rank: number;
-  score: number; // Calculated score for ranking (could be goals_completed * 10 + total_actions)
-}
-
-// Weekly Leaderboard Document
-export interface WeeklyLeaderboard extends BaseDocument {
-  week_key: string; // "2025-W22"
-  week_start: Timestamp;
-  week_end: Timestamp;
+  // Pick a random template
+  const categoryTemplates = templates[timeCategory];
+  const randomTemplate = categoryTemplates[Math.floor(Math.random() * categoryTemplates.length)];
   
-  entries: LeaderboardEntry[]; // Top 100 users
-  total_participants: number;
-  last_updated: Timestamp;
-}
+  return randomTemplate;
+};
 
-// Helper types
-export type CreateGoalInput = Omit<Goal, keyof BaseDocument | 'user_id' | 'current_count' | 'last_reset' | 'weekly_completions' | 'total_completions' |'date_created' | 'last_completed'>;;
-export type UpdateGoalInput = Partial<Pick<Goal, 'title' | 'description' | 'daily_target' | 'reminder_time' | 'icon' | 'color' | 'status'>>;
-export type CreateGoalLogInput = Omit<GoalLog, keyof BaseDocument | 'user_id' | 'goal_title' | 'date_string'>;
-export type UpdateUserProfileInput = Partial<Omit<UserProfile, keyof BaseDocument>>;
+// Helper function to generate default reminder messages for a goal
+export const generateDefaultReminders = (
+  goalName: string,
+  goalType: GoalType,
+  frequency: GoalNotificationFrequency
+): string[] => {
+  if (frequency === 0) return [];
+  
+  const times = getGoalNotificationTimes(frequency);
+  const reminders: string[] = [];
+  
+  // Default fallback message for frequency 1
+  if (frequency === 1) {
+    return ["Still messing around? Better hop to it!"];
+  }
+  
+  // For frequency 2 and 3, use the notification message generator
+  for (let i = 0; i < frequency; i++) {
+    if (i === 0 && frequency > 1) {
+      // First reminder uses default sarcastic message
+      reminders.push("Still messing around? Better hop to it!");
+    } else {
+      // Generate context-appropriate messages for other time slots
+      const timeSlot = times[i];
+      const message = generateGoalNotificationMessage(goalName, goalType, null, timeSlot.label);
+      reminders.push(message);
+    }
+  }
+  
+  return reminders;
+};
+
+// Helper function to validate that reminders array matches frequency
+export const validateReminders = (reminders: string[], frequency: GoalNotificationFrequency): boolean => {
+  return reminders.length === frequency;
+};
+
+// Helper function to get reminder message for a specific time slot
+export const getReminderForTimeSlot = (
+  goal: Goal,
+  timeSlotIndex: number
+): string => {
+  // Validate that we have a reminder for this time slot
+  if (timeSlotIndex >= 0 && timeSlotIndex < goal.reminders.length) {
+    return goal.reminders[timeSlotIndex];
+  }
+  
+  // Fallback to default message if index is out of bounds
+  return `Time to work on "${goal.goal_name}"!`;
+};
