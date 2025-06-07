@@ -64,6 +64,7 @@ class GoalsService {
     }
   }
 
+  // Schedule notifications for a specific goal
   private async scheduleNotificationsForGoal(goal: Goal): Promise<void> {
     try {
       console.log('🔔 Scheduling notifications for goal:', goal.goal_name);
@@ -87,7 +88,7 @@ class GoalsService {
       // Don't throw error - goal operations should succeed even if notifications fail
     }
   }
-  
+
   // Create a new goal
   async createGoal(
     userId: string,
@@ -136,7 +137,17 @@ class GoalsService {
       const goalsRef = collection(db, 'users', userId, 'goals');
       const docRef = await addDoc(goalsRef, goal);
       
-      console.log('Goal created with ID:', docRef.id);
+      console.log('🎯 Goal created with ID:', docRef.id);
+      
+      // Create the goal object with the new ID for notification scheduling
+      const createdGoal: Goal = {
+        id: docRef.id,
+        ...goal
+      };
+      
+      // Schedule notifications for just this goal
+      await this.scheduleNotificationsForGoal(createdGoal);
+      
       return docRef.id;
     } catch (error) {
       console.error('Error creating goal:', error);
@@ -173,7 +184,27 @@ class GoalsService {
       const goalRef = doc(db, 'users', userId, 'goals', goalId);
       await updateDoc(goalRef, updates);
       
-      console.log('Goal updated:', goalId);
+      console.log('📝 Goal updated:', goalId);
+      
+      // Check if notification-related fields were updated
+      const notificationFieldsUpdated = updates.daily_reminders !== undefined || 
+        updates.notification_times !== undefined || 
+        updates.repeat !== undefined || 
+        updates.active !== undefined ||
+        updates.goal_name !== undefined;
+      
+      if (notificationFieldsUpdated) {
+        console.log('🔄 Notification settings changed, rescheduling this goal...');
+        
+        // Get the updated goal and reschedule just this goal
+        const updatedGoals = await this.getUserGoals(userId);
+        const updatedGoal = updatedGoals.find(g => g.id === goalId);
+        
+        if (updatedGoal) {
+          await this.scheduleNotificationsForGoal(updatedGoal);
+        }
+      }
+      
     } catch (error) {
       console.error('Error updating goal:', error);
       throw error;
@@ -252,7 +283,11 @@ class GoalsService {
       const goalRef = doc(db, 'users', userId, 'goals', goalId);
       await deleteDoc(goalRef);
       
-      console.log('Goal deleted:', goalId);
+      console.log('🗑️ Goal deleted:', goalId);
+      
+      // Cancel notifications for just this goal
+      await notificationService.cancelGoalNotification(goalId);
+      
     } catch (error) {
       console.error('Error deleting goal:', error);
       throw error;
@@ -263,7 +298,7 @@ class GoalsService {
   async deactivateGoal(userId: string, goalId: string): Promise<void> {
     try {
       await this.updateGoal(userId, goalId, { active: false });
-      console.log('Goal deactivated:', goalId);
+      console.log('⏸️ Goal deactivated:', goalId);
     } catch (error) {
       console.error('Error deactivating goal:', error);
       throw error;
@@ -278,7 +313,7 @@ class GoalsService {
         completed: false,
         day_count: 0 
       });
-      console.log('Goal reactivated:', goalId);
+      console.log('▶️ Goal reactivated:', goalId);
     } catch (error) {
       console.error('Error reactivating goal:', error);
       throw error;
@@ -301,9 +336,31 @@ class GoalsService {
         }
       }
       
-      console.log('Daily progress reset for user:', userId);
+      console.log('🔄 Daily progress reset for user:', userId);
     } catch (error) {
       console.error('Error resetting daily progress:', error);
+      throw error;
+    }
+  }
+
+  // Manual method to reschedule all notifications for a user (for bulk operations)
+  async rescheduleAllNotifications(userId: string): Promise<void> {
+    try {
+      console.log('🔄 Manually rescheduling all notifications for user:', userId);
+      
+      // Check notification permissions first
+      const permissionStatus = await notificationService.checkPermissions();
+      if (permissionStatus !== 'granted') {
+        console.log('⚠️ Notification permissions not granted, skipping scheduling');
+        return;
+      }
+
+      const activeGoals = await this.getActiveGoals(userId);
+      await notificationService.scheduleGoalNotifications(activeGoals);
+      
+      console.log('✅ All notifications rescheduled successfully');
+    } catch (error) {
+      console.error('Error manually rescheduling notifications:', error);
       throw error;
     }
   }
