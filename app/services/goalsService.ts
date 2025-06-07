@@ -25,6 +25,63 @@ import {
 import { notificationService } from './notificationService';
 
 class GoalsService {
+
+  // Generate custom reminder messages using the API
+  private async generateCustomReminders(
+    goalName: string,
+    notificationTimes: GoalNotificationTimes[]
+  ): Promise<string[]> {
+    try {
+      console.log('🤖 Generating custom reminders for goal:', goalName);
+      
+      // Format times as HH:MM for the API
+      const times = notificationTimes.map(time => {
+        const hour = time.hour.toString().padStart(2, '0');
+        const minute = time.minute.toString().padStart(2, '0');
+        return `${hour}:${minute}`;
+      });
+
+      const requestBody = {
+        tasks: goalName,
+        times: times
+      };
+
+      console.log('📤 API Request:', requestBody);
+
+      const response = await fetch('http://localhost:8080/reminders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('📥 API Response:', data);
+
+      if (data.reminders && Array.isArray(data.reminders)) {
+        console.log('✅ Custom reminders generated successfully');
+        return data.reminders;
+      } else {
+        throw new Error('Invalid API response format');
+      }
+
+    } catch (error) {
+      console.error('❌ Error generating custom reminders:', error);
+      console.log('🔄 Falling back to default reminders');
+      
+      // Fallback to default reminders if API fails
+      return generateDefaultReminders(
+        goalName,
+        'task', // Default to task type for fallback
+        notificationTimes.length as GoalNotificationFrequency
+      );
+    }
+  }
   
   // Get all goals for a user
   async getUserGoals(userId: string): Promise<Goal[]> {
@@ -105,15 +162,18 @@ class GoalsService {
     try {
       const now = Timestamp.now();
       const frequency = goalData.daily_reminders || 1;
-      const reminders = generateDefaultReminders(
-        goalData.goal_name,
-        goalData.goal_type,
-        frequency
-      );
       
       // Use custom times if provided, otherwise use defaults
       const notificationTimes = goalData.notification_times || 
         generateDefaultNotificationTimes(frequency);
+
+      // Generate custom reminders using the API
+      let reminders: string[];
+      if (frequency > 0 && notificationTimes.length > 0) {
+        reminders = await this.generateCustomReminders(goalData.goal_name, notificationTimes);
+      } else {
+        reminders = [];
+      }
 
       const goal: Omit<Goal, 'id'> = {
         user_id: userId,
@@ -162,21 +222,39 @@ class GoalsService {
     updates: Partial<Omit<Goal, 'id' | 'user_id' | 'created_date'>>
   ): Promise<void> {
     try {
-      // If daily_reminders is being updated, regenerate reminders and notification times
+      // Check if we need to regenerate reminders
+      const needsReminderRegeneration = updates.daily_reminders !== undefined || 
+        updates.notification_times !== undefined || 
+        updates.goal_name !== undefined;
+
+      // If daily_reminders is being updated, regenerate notification times and reminders
       if (updates.daily_reminders !== undefined) {
         const currentGoals = await this.getUserGoals(userId);
         const currentGoal = currentGoals.find(g => g.id === goalId);
         
         if (currentGoal) {
-          updates.reminders = generateDefaultReminders(
-            updates.goal_name || currentGoal.goal_name,
-            updates.goal_type || currentGoal.goal_type,
-            updates.daily_reminders
-          );
-          
-          // Also update notification times to match new frequency
+          // Also update notification times to match new frequency if not provided
           if (!updates.notification_times) {
             updates.notification_times = generateDefaultNotificationTimes(updates.daily_reminders);
+          }
+        }
+      }
+
+      // Generate new custom reminders if needed
+      if (needsReminderRegeneration) {
+        const currentGoals = await this.getUserGoals(userId);
+        const currentGoal = currentGoals.find(g => g.id === goalId);
+        
+        if (currentGoal) {
+          const goalName = updates.goal_name || currentGoal.goal_name;
+          const frequency = updates.daily_reminders !== undefined ? updates.daily_reminders : currentGoal.daily_reminders;
+          const notificationTimes = updates.notification_times || currentGoal.notification_times;
+
+          if (frequency > 0 && notificationTimes && notificationTimes.length > 0) {
+            console.log('🔄 Regenerating custom reminders for updated goal...');
+            updates.reminders = await this.generateCustomReminders(goalName, notificationTimes);
+          } else {
+            updates.reminders = [];
           }
         }
       }
@@ -191,7 +269,8 @@ class GoalsService {
         updates.notification_times !== undefined || 
         updates.repeat !== undefined || 
         updates.active !== undefined ||
-        updates.goal_name !== undefined;
+        updates.goal_name !== undefined ||
+        updates.reminders !== undefined;
       
       if (notificationFieldsUpdated) {
         console.log('🔄 Notification settings changed, rescheduling this goal...');
