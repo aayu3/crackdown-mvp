@@ -59,7 +59,6 @@ const TimePicker: React.FC<{
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const minutes = Array.from({ length: 60 }, (_, i) => i);
 
-
   const formatTime = (hour: number, minute: number) => {
     const period = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
@@ -85,13 +84,7 @@ const TimePicker: React.FC<{
         <Ionicons name="time-outline" size={20} color="#007AFF" />
       </TouchableOpacity>
 
-      <TextInput
-        style={styles.labelInput}
-        value={time.label}
-        onChangeText={(text) => onTimeChange({ ...time, label: text })}
-        placeholder="Label (e.g., Morning reminder)"
-        maxLength={30}
-      />
+
 
       {/* Hour Picker Modal */}
       <Modal visible={showHourPicker} transparent animationType="slide">
@@ -282,7 +275,7 @@ const EditGoalForm: React.FC<EditGoalFormProps> = ({ goal, onSave, onCancel, onD
       const goalData = {
         goal_name: goalName.trim(),
         goal_type: goalType,
-        target_count: goalType === 'incremental' ? parseInt(targetCount) || 1 : null,
+        target_count: goalType === 'incremental' ? parseInt(targetCount) || 1 : undefined,
         repeat: selectedDays,
         daily_reminders: dailyReminders,
         notification_times: dailyReminders > 0 ? notificationTimes : [],
@@ -893,14 +886,7 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
   },
-  labelInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    backgroundColor: 'white',
-  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
