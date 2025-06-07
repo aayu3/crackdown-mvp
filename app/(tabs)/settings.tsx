@@ -13,12 +13,15 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useGoals } from '../hooks/goalsHook';
 import { notificationService } from '../services/notificationService';
+import { generateTestNotificationTimes } from '../types/goals';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export default function SettingsScreen() {
   const { logout, userProfile } = useAuth();
+  const { createGoal, activeGoals } = useGoals();
   const [permissionStatus, setPermissionStatus] = useState<string>('unknown');
   const [testing, setTesting] = useState(false);
 
@@ -75,6 +78,71 @@ export default function SettingsScreen() {
       console.error(error);
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleCreateTestGoal = async () => {
+    try {
+      setTesting(true);
+      
+      // Create test notification times starting 1 minute from now
+      const testTimes = generateTestNotificationTimes(2); // 2 notifications
+      
+      await createGoal({
+        goal_name: "Test Goal for Notifications",
+        goal_type: "task",
+        target_count: null, // No target for task goal
+        repeat: [0, 1, 2, 3, 4, 5, 6], // All days
+        daily_reminders: 2,
+        notification_times: testTimes,
+      });
+      
+      const timesText = testTimes.map(t => `${t.hour}:${t.minute.toString().padStart(2, '0')}`).join(', ');
+      Alert.alert(
+        'Test Goal Created!', 
+        `Goal created with notifications at: ${timesText}\n\nNow tap "Schedule Goal Notifications" to activate them.`
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create test goal');
+      console.error(error);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleScheduleGoalNotifications = async () => {
+    try {
+      setTesting(true);
+      
+      if (activeGoals.length === 0) {
+        Alert.alert('No Goals', 'Create some goals first to schedule notifications');
+        return;
+      }
+      
+      console.log('📋 Active goals to schedule:', activeGoals);
+      await notificationService.scheduleGoalNotifications(activeGoals);
+      
+      Alert.alert(
+        'Scheduled!', 
+        `Scheduled notifications for ${activeGoals.length} goals. Check console for details.`
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to schedule goal notifications');
+      console.error(error);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleShowScheduled = async () => {
+    try {
+      const notifications = await notificationService.getScheduledNotifications();
+      Alert.alert(
+        'Scheduled Notifications', 
+        `Found ${notifications.length} scheduled notifications. Check console for full details.`
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to get scheduled notifications');
     }
   };
 
@@ -159,6 +227,11 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
+          <View style={styles.statusCard}>
+            <Text style={styles.statusLabel}>Active Goals:</Text>
+            <Text style={styles.statusValue}>{activeGoals.length}</Text>
+          </View>
+
           {/* Test Buttons */}
           <View style={styles.buttonGroup}>
             <TouchableOpacity
@@ -206,6 +279,39 @@ export default function SettingsScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.testButton, styles.infoButton]}
+              onPress={handleCreateTestGoal}
+              disabled={testing || permissionStatus !== 'granted'}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="white" />
+              <Text style={styles.infoButtonText}>
+                {testing ? 'Creating...' : 'Create Test Goal (1 min)'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.testButton, styles.purpleButton]}
+              onPress={handleScheduleGoalNotifications}
+              disabled={testing || permissionStatus !== 'granted'}
+            >
+              <Ionicons name="calendar-outline" size={20} color="white" />
+              <Text style={styles.purpleButtonText}>
+                {testing ? 'Scheduling...' : 'Schedule Goal Notifications'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.testButton, styles.grayButton]}
+              onPress={handleShowScheduled}
+              disabled={testing}
+            >
+              <Ionicons name="list-outline" size={20} color="white" />
+              <Text style={styles.grayButtonText}>
+                Show Scheduled (Console)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.testButton, styles.dangerButton]}
               onPress={handleCancelAll}
               disabled={testing}
@@ -218,7 +324,7 @@ export default function SettingsScreen() {
           </View>
 
           <Text style={styles.helpText}>
-            💡 After scheduling delayed notifications, put the app in background to see them appear
+            💡 1. Create test goal → 2. Schedule goal notifications → 3. Check console logs
           </Text>
         </View>
 
@@ -349,6 +455,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffc107',
   },
   warningButtonText: {
+    color: 'white',
+    fontSize: screenWidth * 0.04,
+    fontWeight: '600',
+  },
+  infoButton: {
+    backgroundColor: '#17a2b8',
+  },
+  infoButtonText: {
+    color: 'white',
+    fontSize: screenWidth * 0.04,
+    fontWeight: '600',
+  },
+  purpleButton: {
+    backgroundColor: '#6f42c1',
+  },
+  purpleButtonText: {
+    color: 'white',
+    fontSize: screenWidth * 0.04,
+    fontWeight: '600',
+  },
+  grayButton: {
+    backgroundColor: '#6c757d',
+  },
+  grayButtonText: {
     color: 'white',
     fontSize: screenWidth * 0.04,
     fontWeight: '600',

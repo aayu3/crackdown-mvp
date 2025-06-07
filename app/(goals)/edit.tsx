@@ -2,11 +2,12 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -17,7 +18,14 @@ import {
   View,
 } from 'react-native';
 import { useGoals } from '../hooks/goalsHook';
-import { DayOfWeek, Goal, GoalNotificationFrequency, GoalType } from '../types/goals';
+import {
+  DayOfWeek,
+  Goal,
+  GoalNotificationFrequency,
+  GoalNotificationTimes,
+  GoalType,
+  generateDefaultNotificationTimes
+} from '../types/goals';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -33,10 +41,143 @@ const DAYS = [
 
 const REMINDER_OPTIONS = [
   { label: 'No reminders', value: 0 as GoalNotificationFrequency },
-  { label: '1 per day (12 PM)', value: 1 as GoalNotificationFrequency },
-  { label: '2 per day (10 AM, 3 PM)', value: 2 as GoalNotificationFrequency },
-  { label: '3 per day (9 AM, 12 PM, 4 PM)', value: 3 as GoalNotificationFrequency },
+  { label: '1 per day', value: 1 as GoalNotificationFrequency },
+  { label: '2 per day', value: 2 as GoalNotificationFrequency },
+  { label: '3 per day', value: 3 as GoalNotificationFrequency },
 ];
+
+// Time picker component
+const TimePicker: React.FC<{
+  time: GoalNotificationTimes;
+  onTimeChange: (time: GoalNotificationTimes) => void;
+  onRemove: () => void;
+  index: number;
+}> = ({ time, onTimeChange, onRemove, index }) => {
+  const [showHourPicker, setShowHourPicker] = useState(false);
+  const [showMinutePicker, setShowMinutePicker] = useState(false);
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = Array.from({ length: 60 }, (_, i) => i);
+
+
+  const formatTime = (hour: number, minute: number) => {
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+  };
+
+  return (
+    <View style={styles.timePickerContainer}>
+      <View style={styles.timePickerHeader}>
+        <Text style={styles.timePickerLabel}>Reminder {index + 1}</Text>
+        <TouchableOpacity onPress={onRemove} style={styles.removeTimeButton}>
+          <Ionicons name="close-circle" size={20} color="#dc3545" />
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={styles.timeDisplay}
+        onPress={() => setShowHourPicker(true)}
+      >
+        <Text style={styles.timeText}>
+          {formatTime(time.hour, time.minute)}
+        </Text>
+        <Ionicons name="time-outline" size={20} color="#007AFF" />
+      </TouchableOpacity>
+
+      <TextInput
+        style={styles.labelInput}
+        value={time.label}
+        onChangeText={(text) => onTimeChange({ ...time, label: text })}
+        placeholder="Label (e.g., Morning reminder)"
+        maxLength={30}
+      />
+
+      {/* Hour Picker Modal */}
+      <Modal visible={showHourPicker} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.pickerModal}>
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setShowHourPicker(false)}>
+                <Text style={styles.pickerCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.pickerTitle}>Select Hour</Text>
+              <TouchableOpacity onPress={() => setShowMinutePicker(true)}>
+                <Text style={styles.pickerNext}>Next</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.pickerList}>
+              {hours.map((hour) => (
+                <TouchableOpacity
+                  key={hour}
+                  style={[
+                    styles.pickerItem,
+                    time.hour === hour && styles.selectedPickerItem,
+                  ]}
+                  onPress={() => {
+                    onTimeChange({ ...time, hour });
+                    setShowHourPicker(false);
+                    setShowMinutePicker(true);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.pickerItemText,
+                      time.hour === hour && styles.selectedPickerItemText,
+                    ]}
+                  >
+                    {hour === 0 ? '12 AM' : hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Minute Picker Modal */}
+      <Modal visible={showMinutePicker} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.pickerModal}>
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setShowMinutePicker(false)}>
+                <Text style={styles.pickerCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.pickerTitle}>Select Minutes</Text>
+              <TouchableOpacity onPress={() => setShowMinutePicker(false)}>
+                <Text style={styles.pickerDone}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.pickerList}>
+              {minutes.map((minute) => (
+                <TouchableOpacity
+                  key={minute}
+                  style={[
+                    styles.pickerItem,
+                    time.minute === minute && styles.selectedPickerItem,
+                  ]}
+                  onPress={() => {
+                    onTimeChange({ ...time, minute });
+                    setShowMinutePicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.pickerItemText,
+                      time.minute === minute && styles.selectedPickerItemText,
+                    ]}
+                  >
+                    :{minute.toString().padStart(2, '0')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
 
 interface EditGoalFormProps {
   goal?: Goal;
@@ -51,7 +192,20 @@ const EditGoalForm: React.FC<EditGoalFormProps> = ({ goal, onSave, onCancel, onD
   const [targetCount, setTargetCount] = useState(goal?.target_count?.toString() || '1');
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>(goal?.repeat || [1, 2, 3, 4, 5]);
   const [dailyReminders, setDailyReminders] = useState<GoalNotificationFrequency>(goal?.daily_reminders || 1);
+  const [notificationTimes, setNotificationTimes] = useState<GoalNotificationTimes[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Initialize notification times when component mounts or dailyReminders changes
+  useEffect(() => {
+    if (goal?.notification_times && goal.notification_times.length === dailyReminders) {
+      // Use existing custom times
+      setNotificationTimes(goal.notification_times);
+    } else {
+      // Generate default times for the selected frequency
+      const defaultTimes = generateDefaultNotificationTimes(dailyReminders);
+      setNotificationTimes(defaultTimes);
+    }
+  }, [goal, dailyReminders]);
 
   const toggleDay = (day: DayOfWeek) => {
     setSelectedDays(prev => 
@@ -67,6 +221,46 @@ const EditGoalForm: React.FC<EditGoalFormProps> = ({ goal, onSave, onCancel, onD
     setTargetCount(newValue.toString());
   };
 
+  const handleReminderFrequencyChange = (frequency: GoalNotificationFrequency) => {
+    setDailyReminders(frequency);
+    // Generate new default times for the new frequency
+    const defaultTimes = generateDefaultNotificationTimes(frequency);
+    setNotificationTimes(defaultTimes);
+  };
+
+  const updateNotificationTime = (index: number, newTime: GoalNotificationTimes) => {
+    const updatedTimes = [...notificationTimes];
+    updatedTimes[index] = newTime;
+    setNotificationTimes(updatedTimes);
+  };
+
+  const removeNotificationTime = (index: number) => {
+    if (notificationTimes.length > 1) {
+      const updatedTimes = notificationTimes.filter((_, i) => i !== index);
+      setNotificationTimes(updatedTimes);
+      // Update the frequency to match the new count
+      setDailyReminders((updatedTimes.length as GoalNotificationFrequency));
+    }
+  };
+
+  const addNotificationTime = () => {
+    if (notificationTimes.length < 3) {
+      const newTime: GoalNotificationTimes = {
+        hour: 12,
+        minute: 0,
+        label: `Reminder ${notificationTimes.length + 1}`,
+      };
+      const updatedTimes = [...notificationTimes, newTime];
+      setNotificationTimes(updatedTimes);
+      setDailyReminders((updatedTimes.length as GoalNotificationFrequency));
+    }
+  };
+
+  const resetToDefaults = () => {
+    const defaultTimes = generateDefaultNotificationTimes(dailyReminders);
+    setNotificationTimes(defaultTimes);
+  };
+
   const handleSave = async () => {
     if (!goalName.trim()) {
       Alert.alert('Error', 'Goal name is required');
@@ -78,14 +272,20 @@ const EditGoalForm: React.FC<EditGoalFormProps> = ({ goal, onSave, onCancel, onD
       return;
     }
 
+    if (dailyReminders > 0 && notificationTimes.length !== dailyReminders) {
+      Alert.alert('Error', 'Number of notification times must match reminder frequency');
+      return;
+    }
+
     setSaving(true);
     try {
       const goalData = {
         goal_name: goalName.trim(),
         goal_type: goalType,
-        target_count: goalType === 'incremental' ? parseInt(targetCount) || 1 : undefined,
+        target_count: goalType === 'incremental' ? parseInt(targetCount) || 1 : null,
         repeat: selectedDays,
         daily_reminders: dailyReminders,
+        notification_times: dailyReminders > 0 ? notificationTimes : [],
       };
 
       await onSave(goalData);
@@ -207,7 +407,7 @@ const EditGoalForm: React.FC<EditGoalFormProps> = ({ goal, onSave, onCancel, onD
           {REMINDER_OPTIONS.map((option) => (
             <TouchableOpacity
               key={option.value}
-              onPress={() => setDailyReminders(option.value)}
+              onPress={() => handleReminderFrequencyChange(option.value)}
               style={[
                 styles.reminderOption,
                 dailyReminders === option.value && styles.activeReminderOption,
@@ -225,6 +425,36 @@ const EditGoalForm: React.FC<EditGoalFormProps> = ({ goal, onSave, onCancel, onD
           ))}
         </View>
       </View>
+
+      {/* Custom Notification Times */}
+      {dailyReminders > 0 && (
+        <View style={styles.inputGroup}>
+          <View style={styles.notificationTimesHeader}>
+            <Text style={styles.label}>Notification Times</Text>
+            <View style={styles.timeActionButtons}>
+              <TouchableOpacity onPress={resetToDefaults} style={styles.resetButton}>
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </TouchableOpacity>
+              {notificationTimes.length < 3 && (
+                <TouchableOpacity onPress={addNotificationTime} style={styles.addTimeButton}>
+                  <Ionicons name="add" size={16} color="#007AFF" />
+                  <Text style={styles.addTimeButtonText}>Add</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {notificationTimes.map((time, index) => (
+            <TimePicker
+              key={index}
+              time={time}
+              onTimeChange={(newTime) => updateNotificationTime(index, newTime)}
+              onRemove={() => removeNotificationTime(index)}
+              index={index}
+            />
+          ))}
+        </View>
+      )}
 
       {/* Action Buttons */}
       <View style={styles.buttonContainer}>
@@ -382,32 +612,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   loadingText: {
-    marginTop: screenHeight * 0.02, // 2% of screen height
-    fontSize: screenWidth * 0.04, // 4% of screen width
+    marginTop: screenHeight * 0.02,
+    fontSize: screenWidth * 0.04,
     color: '#666',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: screenWidth * 0.05, // 5% of screen width
-    paddingVertical: screenHeight * 0.02, // 2% of screen height
+    paddingHorizontal: screenWidth * 0.05,
+    paddingVertical: screenHeight * 0.02,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    // Add extra top padding for devices with notches
-    paddingTop: screenHeight * 0.025, // 2.5% of screen height
+    paddingTop: screenHeight * 0.025,
   },
   backButton: {
-    padding: screenWidth * 0.01, // 1% of screen width
+    padding: screenWidth * 0.01,
   },
   title: {
-    fontSize: screenWidth * 0.05, // 5% of screen width
+    fontSize: screenWidth * 0.05,
     fontWeight: '600',
     color: '#333',
   },
   placeholder: {
-    width: screenWidth * 0.08, // 8% of screen width
+    width: screenWidth * 0.08,
   },
   scrollView: {
     flex: 1,
@@ -591,6 +820,145 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '500',
   },
+  notificationTimesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  timeActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  resetButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#666',
+  },
+  resetButtonText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  addTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    gap: 4,
+  },
+  addTimeButtonText: {
+    fontSize: 12,
+    color: '#007AFF',
+  },
+  timePickerContainer: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fafafa',
+    marginBottom: 8,
+  },
+  timePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  timePickerLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  removeTimeButton: {
+    padding: 4,
+  },
+  timeDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 8,
+  },
+  timeText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  labelInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    backgroundColor: 'white',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerModal: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: screenHeight * 0.6,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  pickerCancel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  pickerNext: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  pickerDone: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  pickerList: {
+    maxHeight: screenHeight * 0.4,
+  },
+  pickerItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  selectedPickerItem: {
+    backgroundColor: '#f0f8ff',
+  },
+  pickerItemText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  selectedPickerItemText: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
   buttonContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -629,5 +997,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
+  }
 });

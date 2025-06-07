@@ -1,5 +1,6 @@
 // app/contexts/AuthContext.tsx
 
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import {
   createUserWithEmailAndPassword,
@@ -12,6 +13,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth } from '../../firebaseConfig';
 import { authService } from '../services/authService';
 import { UserProfile } from '../types/user';
+
 
 interface AuthContextType {
   // State
@@ -37,6 +39,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const checkPermissions = async (): Promise<string> => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      return status;
+    } catch (error) {
+      console.error('Error checking permissions:', error);
+      return 'unknown';
+    }
+  };
 
   // Load user profile from Firestore
   const loadUserProfile = async (firebaseUser: User | null) => {
@@ -87,6 +99,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       await signInWithEmailAndPassword(auth, email, password);
+      const permissionStatus = await checkPermissions();
+      if (permissionStatus !== 'granted') {
+              const { status } = await Notifications.requestPermissionsAsync();
+              console.log('Permission status:', status);
+        
+
+      }
+      console.log(permissionStatus)
       router.push('/(tabs)/goals')
     } catch (error) {
       console.error('Login error:', error);

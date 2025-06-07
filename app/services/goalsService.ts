@@ -13,7 +13,16 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
-import { DayOfWeek, generateDefaultReminders, Goal, GoalNotificationFrequency, GoalType } from '../types/goals';
+import {
+  DayOfWeek,
+  generateDefaultNotificationTimes,
+  generateDefaultReminders,
+  Goal,
+  GoalNotificationFrequency,
+  GoalNotificationTimes,
+  GoalType
+} from '../types/goals';
+import { notificationService } from './notificationService';
 
 class GoalsService {
   
@@ -55,16 +64,41 @@ class GoalsService {
     }
   }
 
+  private async scheduleNotificationsForGoal(goal: Goal): Promise<void> {
+    try {
+      console.log('🔔 Scheduling notifications for goal:', goal.goal_name);
+      
+      // Check notification permissions first
+      const permissionStatus = await notificationService.checkPermissions();
+      if (permissionStatus !== 'granted') {
+        console.log('⚠️ Notification permissions not granted, skipping scheduling');
+        return;
+      }
+
+      // Only schedule if goal is active and has reminders
+      if (goal.active && goal.daily_reminders > 0 && goal.repeat.length > 0) {
+        await notificationService.rescheduleGoalNotification(goal);
+        console.log('✅ Notifications scheduled for goal:', goal.goal_name);
+      } else {
+        console.log('⏭️ Goal is inactive or has no reminders - skipping scheduling');
+      }
+    } catch (error) {
+      console.error('❌ Error scheduling notifications for goal:', error);
+      // Don't throw error - goal operations should succeed even if notifications fail
+    }
+  }
+  
   // Create a new goal
   async createGoal(
     userId: string,
     goalData: {
       goal_name: string;
       goal_type: GoalType;
-      target_count?: number;
+      target_count: number | null;
       icon?: string;
       repeat: DayOfWeek[];
       daily_reminders?: GoalNotificationFrequency;
+      notification_times?: GoalNotificationTimes[];
     }
   ): Promise<string> {
     try {
@@ -75,6 +109,10 @@ class GoalsService {
         goalData.goal_type,
         frequency
       );
+      
+      // Use custom times if provided, otherwise use defaults
+      const notificationTimes = goalData.notification_times || 
+        generateDefaultNotificationTimes(frequency);
 
       const goal: Omit<Goal, 'id'> = {
         user_id: userId,
@@ -92,6 +130,7 @@ class GoalsService {
         last_day_completed: null,
         daily_reminders: frequency,
         reminders: reminders,
+        notification_times: notificationTimes,
       };
 
       const goalsRef = collection(db, 'users', userId, 'goals');
@@ -112,7 +151,7 @@ class GoalsService {
     updates: Partial<Omit<Goal, 'id' | 'user_id' | 'created_date'>>
   ): Promise<void> {
     try {
-      // If daily_reminders is being updated, regenerate reminders
+      // If daily_reminders is being updated, regenerate reminders and notification times
       if (updates.daily_reminders !== undefined) {
         const currentGoals = await this.getUserGoals(userId);
         const currentGoal = currentGoals.find(g => g.id === goalId);
@@ -123,6 +162,11 @@ class GoalsService {
             updates.goal_type || currentGoal.goal_type,
             updates.daily_reminders
           );
+          
+          // Also update notification times to match new frequency
+          if (!updates.notification_times) {
+            updates.notification_times = generateDefaultNotificationTimes(updates.daily_reminders);
+          }
         }
       }
 

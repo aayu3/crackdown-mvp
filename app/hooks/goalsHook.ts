@@ -1,9 +1,9 @@
-// app/hooks/useGoals.ts
+// app/hooks/goalsHook.ts
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { goalsService } from '../services/goalsService';
-import { DayOfWeek, Goal, GoalNotificationFrequency, GoalType } from '../types/goals';
+import { DayOfWeek, Goal, GoalNotificationFrequency, GoalNotificationTimes, GoalType } from '../types/goals';
 
 export const useGoals = () => {
   const { user, isLoggedIn } = useAuth();
@@ -55,10 +55,11 @@ export const useGoals = () => {
   const createGoal = useCallback(async (goalData: {
     goal_name: string;
     goal_type: GoalType;
-    target_count?: number;
+    target_count: number | null;
     icon?: string;
     repeat: DayOfWeek[];
     daily_reminders?: GoalNotificationFrequency;
+    notification_times?: GoalNotificationTimes[];
   }) => {
     if (!user?.uid) throw new Error('User not authenticated');
 

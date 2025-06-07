@@ -1,4 +1,4 @@
-// app/types/goal.ts
+// app/types/goals.ts
 import { Timestamp } from 'firebase/firestore';
 
 // Goal Type - extensible for future types
@@ -41,6 +41,7 @@ export interface Goal {
   // Notification settings
   daily_reminders: GoalNotificationFrequency; // 0-3 reminders per day for this specific goal
   reminders: string[]; // Pregenerated reminder messages (length matches daily_reminders)
+  notification_times: GoalNotificationTimes[]; // Custom times set by user (length matches daily_reminders)
 }
 
 // Helper type for notification scheduling
@@ -67,9 +68,15 @@ export const GOAL_NOTIFICATION_SCHEDULES: Record<GoalNotificationFrequency, Goal
   ]
 };
 
-// Helper function to get notification times for a goal's frequency
-export const getGoalNotificationTimes = (frequency: GoalNotificationFrequency): GoalNotificationTimes[] => {
-  return GOAL_NOTIFICATION_SCHEDULES[frequency] || [];
+// Helper function to get notification times for a goal (uses custom times if set, otherwise defaults)
+export const getGoalNotificationTimes = (goal: Goal): GoalNotificationTimes[] => {
+  // If goal has custom notification times, use those
+  if (goal.notification_times && goal.notification_times.length === goal.daily_reminders) {
+    return goal.notification_times;
+  }
+  
+  // Otherwise, fall back to default schedule
+  return GOAL_NOTIFICATION_SCHEDULES[goal.daily_reminders] || [];
 };
 
 // Helper function to get frequency description for goals
@@ -139,7 +146,7 @@ export const generateDefaultReminders = (
 ): string[] => {
   if (frequency === 0) return [];
   
-  const times = getGoalNotificationTimes(frequency);
+  const times = GOAL_NOTIFICATION_SCHEDULES[frequency] || [];
   const reminders: string[] = [];
   
   // Default fallback message for frequency 1
@@ -161,6 +168,34 @@ export const generateDefaultReminders = (
   }
   
   return reminders;
+};
+
+// Helper function to generate default notification times for a goal
+export const generateDefaultNotificationTimes = (
+  frequency: GoalNotificationFrequency
+): GoalNotificationTimes[] => {
+  return GOAL_NOTIFICATION_SCHEDULES[frequency] || [];
+};
+
+// Helper function to create notification times for testing (1 minute intervals from now)
+export const generateTestNotificationTimes = (
+  frequency: GoalNotificationFrequency
+): GoalNotificationTimes[] => {
+  if (frequency === 0) return [];
+  
+  const now = new Date();
+  const times: GoalNotificationTimes[] = [];
+  
+  for (let i = 0; i < frequency; i++) {
+    const testTime = new Date(now.getTime() + ((i + 1) * 60 * 1000)); // Each notification 1 minute apart
+    times.push({
+      hour: testTime.getHours(),
+      minute: testTime.getMinutes(),
+      label: `Test ${i + 1} (${testTime.getHours()}:${testTime.getMinutes().toString().padStart(2, '0')})`
+    });
+  }
+  
+  return times;
 };
 
 // Helper function to validate that reminders array matches frequency
