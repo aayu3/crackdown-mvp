@@ -6,7 +6,6 @@ import { Platform } from 'react-native';
 // Configure how notifications appear when app is open
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
     shouldShowBanner: true,
@@ -20,7 +19,7 @@ class NotificationService {
   async requestPermissions(): Promise<boolean> {
     try {
       console.log('Requesting notification permissions...');
-      
+       
       const { status } = await Notifications.requestPermissionsAsync();
       console.log('Permission status:', status);
       
