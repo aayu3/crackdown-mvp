@@ -178,7 +178,7 @@ export default function RegisterScreen() {
                         onChangeText={setPassword}
                         secureTextEntry
                         autoCapitalize="none"
-                        autoComplete="new-password"
+                        autoCorrect={false}
                         placeholderTextColor='#666'
                     />
                     
@@ -189,7 +189,7 @@ export default function RegisterScreen() {
                         onChangeText={setConfirmPassword}
                         secureTextEntry
                         autoCapitalize="none"
-                        autoComplete="new-password"
+                        autoCorrect={false}
                         placeholderTextColor='#666'
                     />
                     

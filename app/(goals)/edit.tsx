@@ -275,7 +275,7 @@ const EditGoalForm: React.FC<EditGoalFormProps> = ({ goal, onSave, onCancel, onD
       const goalData = {
         goal_name: goalName.trim(),
         goal_type: goalType,
-        target_count: goalType === 'incremental' ? parseInt(targetCount) || 1 : undefined,
+        target_count: goalType === 'incremental' ? parseInt(targetCount) || 1 : null,
         repeat: selectedDays,
         daily_reminders: dailyReminders,
         notification_times: dailyReminders > 0 ? notificationTimes : [],
