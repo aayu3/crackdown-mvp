@@ -1,15 +1,15 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
@@ -135,6 +135,7 @@ export default function RegisterScreen() {
                         onChangeText={setUsername}
                         autoCorrect={false}
                         autoCapitalize="none"
+                        placeholderTextColor='#666'
                     />
                     
                     <View style={styles.nameRow}>
@@ -145,6 +146,7 @@ export default function RegisterScreen() {
                             onChangeText={setFirstname}
                             autoCorrect={false}
                             autoCapitalize="words"
+                            placeholderTextColor='#666'
                         />
                         
                         <TextInput
@@ -154,6 +156,7 @@ export default function RegisterScreen() {
                             onChangeText={setLastname}
                             autoCorrect={false}
                             autoCapitalize="words"
+                            placeholderTextColor='#666'
                         />
                     </View>
                     
@@ -165,6 +168,7 @@ export default function RegisterScreen() {
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoCorrect={false}
+                        placeholderTextColor='#666'
                     />
                     
                     <TextInput
@@ -175,6 +179,7 @@ export default function RegisterScreen() {
                         secureTextEntry
                         autoCapitalize="none"
                         autoComplete="new-password"
+                        placeholderTextColor='#666'
                     />
                     
                     <TextInput
@@ -185,6 +190,7 @@ export default function RegisterScreen() {
                         secureTextEntry
                         autoCapitalize="none"
                         autoComplete="new-password"
+                        placeholderTextColor='#666'
                     />
                     
                     <Text style={styles.passwordHint}>

@@ -79,6 +79,8 @@ export default function LoginScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    placeholderTextColor='#666'
+
                 />
                 
                 <TextInput
@@ -88,6 +90,7 @@ export default function LoginScreen() {
                     onChangeText={setPassword}
                     secureTextEntry
                     autoCapitalize="none"
+                    placeholderTextColor='#666'
                 />
                 
                 <TouchableOpacity 
