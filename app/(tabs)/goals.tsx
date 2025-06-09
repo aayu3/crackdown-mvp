@@ -1,325 +1,221 @@
-// Example Goals Screen
+// app/(tabs)/goals.tsx
+
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  Modal,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useAuth } from '../context/AuthContext';
+//import { NotificationTester } from '../components/NotificationTester';
 import { useGoals } from '../hooks/goalsHook';
-import { Goal, GoalType } from '../types/goals';
+import { Goal } from '../types/goals';
 
-export default function GoalsScreen() {
-  const { userProfile } = useAuth();
-  const {
-    goals,
-    todaysLogs,
-    weeklyLeaderboard,
-    userRank,
-    todaysCompletedGoals,
-    todaysTotalActions,
-    weeklyStats,
-    loading,
-    createGoal,
-    completeReminder,
-    incrementCounter,
-  } = useGoals(true); // Real-time updates
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newGoalTitle, setNewGoalTitle] = useState('');
-  const [newGoalType, setNewGoalType] = useState<GoalType>('reminder');
-  const [newGoalTarget, setNewGoalTarget] = useState('8');
-  const [newGoalIcon, setNewGoalIcon] = useState('💧');
+const GoalItem: React.FC<{
+  goal: Goal;
+  onToggleTask: (goalId: string) => void;
+  onUpdateCount: (goalId: string, newCount: number) => void;
+}> = ({ goal, onToggleTask, onUpdateCount }) => {
+  const handleIncrement = () => {
+    onUpdateCount(goal.id, goal.day_count + 1);
+  };
 
-  const handleCreateGoal = async () => {
-    if (!newGoalTitle.trim()) {
-      Alert.alert('Error', 'Please enter a goal title');
-      return;
-    }
-
-    try {
-      await createGoal({
-        title: newGoalTitle.trim(),
-        type: newGoalType,
-        status: 'active',
-        daily_target: newGoalType === 'counter' ? parseInt(newGoalTarget) : null,
-        icon: newGoalIcon,
-        reminder_time: '09:00',
-      });
-
-      setNewGoalTitle('');
-      setNewGoalTarget('8');
-      setNewGoalIcon('💧');
-      setShowCreateModal(false);
-      Alert.alert('Success', 'Goal created!');
-    } catch (error) {
-      console.error('Error creating goal:', error);
-      Alert.alert('Error', 'Failed to create goal');
+  const handleDecrement = () => {
+    if (goal.day_count > 0) {
+      onUpdateCount(goal.id, goal.day_count - 1);
     }
   };
 
-  const handleGoalAction = async (goal: Goal) => {
-    try {
-      if (goal.type === 'reminder') {
-        if (goal.current_count >= 1) {
-          Alert.alert('Already Done', 'You\'ve already completed this reminder today!');
-          return;
-        }
-        await completeReminder(goal.id);
-        Alert.alert('✅ Complete!', `"${goal.title}" marked as done!`);
-      } else {
-        // Counter goal
-        await incrementCounter(goal.id, 1);
-        const newTotal = goal.current_count + 1;
-        const target = goal.daily_target || 1;
-        
-        if (newTotal >= target) {
-          Alert.alert('🎉 Goal Reached!', `Great job! You've reached your daily target for "${goal.title}"`);
-        } else {
-          Alert.alert('Progress!', `${newTotal}/${target} ${goal.title}`);
-        }
-      }
-    } catch (error) {
-      console.error('Error updating goal:', error);
-      Alert.alert('Error', 'Failed to update goal');
-    }
-  };
-
-  const getGoalProgress = (goal: Goal) => {
-    if (goal.type === 'reminder') {
-      return goal.current_count >= 1 ? 'Complete ✅' : 'Pending';
-    } else {
-      const target = goal.daily_target || 1;
-      return `${goal.current_count}/${target}`;
-    }
-  };
-
-  const getGoalColor = (goal: Goal) => {
-    if (goal.type === 'reminder') {
-      return goal.current_count >= 1 ? '#28a745' : '#6c757d';
-    } else {
-      const target = goal.daily_target || 1;
-      return goal.current_count >= target ? '#28a745' : '#007AFF';
-    }
-  };
-
-  const renderGoal = ({ item: goal }: { item: Goal }) => (
-    <View style={styles.goalItem}>
-      <View style={styles.goalHeader}>
-        <View style={styles.goalInfo}>
-          <Text style={styles.goalIcon}>{goal.icon}</Text>
-          <View style={styles.goalText}>
-            <Text style={styles.goalTitle}>{goal.title}</Text>
-            <Text style={[styles.goalProgress, { color: getGoalColor(goal) }]}>
-              {getGoalProgress(goal)}
-            </Text>
-          </View>
-        </View>
-        
+  const renderRightControls = () => {
+    if (goal.goal_type === 'task') {
+      return (
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: getGoalColor(goal) }]}
-          onPress={() => handleGoalAction(goal)}
-          disabled={goal.type === 'reminder' && goal.current_count >= 1}
+          onPress={() => onToggleTask(goal.id)}
+          style={styles.checkboxContainer}
         >
-          <Text style={styles.actionButtonText}>
-            {goal.type === 'reminder' ? 
-              (goal.current_count >= 1 ? '✓' : 'Done') : 
-              '+1'
-            }
-          </Text>
+          <Ionicons
+            name={goal.completed ? 'checkmark-circle' : 'checkmark-circle-outline'}
+            size={24}
+            color={goal.completed ? '#28a745' : '#ccc'}
+          />
         </TouchableOpacity>
+      );
+    } else {
+      // Incremental goal controls
+      return (
+        <View style={styles.incrementalControls}>
+          <TouchableOpacity
+            onPress={handleDecrement}
+            style={styles.incrementalButton}
+            disabled={goal.day_count <= 0}
+          >
+            <Ionicons
+              name="remove-circle-outline"
+              size={24}
+              color={goal.day_count <= 0 ? '#ccc' : '#007AFF'}
+            />
+          </TouchableOpacity>
+          
+          <Text style={styles.countText}>
+            {goal.day_count}{goal.target_count ? `/${goal.target_count}` : ''}
+          </Text>
+          
+          <TouchableOpacity
+            onPress={handleIncrement}
+            style={styles.incrementalButton}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={24}
+              color="#007AFF"
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+  };
+
+  return (
+    <View style={[
+      styles.goalItem,
+      goal.completed && styles.completedGoalItem
+    ]}>
+      <View style={styles.goalInfo}>
+        {goal.icon && <Text style={styles.goalIcon}>{goal.icon}</Text>}
+        <Text style={[
+          styles.goalName,
+          goal.completed && styles.completedGoalName
+        ]}>
+          {goal.goal_name}
+        </Text>
       </View>
+      
+      {renderRightControls()}
     </View>
   );
+};
 
-  if (loading) {
+export default function GoalsScreen() {
+  const router = useRouter();
+  const [showTester, setShowTester] = useState(false);
+  const {
+    activeGoals,
+    completedGoals,
+    loading,
+    error,
+    toggleTaskCompletion,
+    updateIncrementalCount,
+    refreshGoals,
+  } = useGoals();
+
+  const handleToggleTask = async (goalId: string) => {
+    try {
+      await toggleTaskCompletion(goalId);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to update task');
+    }
+  };
+
+  const handleUpdateCount = async (goalId: string, newCount: number) => {
+    try {
+      await updateIncrementalCount(goalId, newCount);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to update count');
+    }
+  };
+
+  const navigateToEdit = () => {
+    router.replace('/(goals)/edit');
+  };
+
+  if (loading && activeGoals.length === 0 && completedGoals.length === 0) {
     return (
-      <View style={styles.centerContainer}>
-        <Text>Loading your goals...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading goals...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header with user info */}
-      {userProfile && (
-        <View style={styles.header}>
-          <Text style={styles.welcomeText}>Hi, {userProfile.display_name}! 👋</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{todaysCompletedGoals}</Text>
-              <Text style={styles.statLabel}>Goals Today</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{weeklyStats.goalsCompleted}</Text>
-              <Text style={styles.statLabel}>This Week</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfile.total_goals_completed}</Text>
-              <Text style={styles.statLabel}>All Time</Text>
-            </View>
-          </View>
-        </View>
-      )}
+    <SafeAreaView style={styles.container}>
+      {/* Header with edit button */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => setShowTester(!showTester)} style={styles.testButton}>
+          <Ionicons name={showTester ? "flask" : "flask-outline"} size={20} color="#ff9500" />
+        </TouchableOpacity>
+        <Text style={styles.title}>My Goals</Text>
+        <TouchableOpacity onPress={navigateToEdit} style={styles.editButton}>
+          <Ionicons name="create-outline" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
 
-      {/* Quick Stats */}
-      <View style={styles.quickStatsContainer}>
-        <Text style={styles.sectionTitle}>Today's Progress</Text>
-        <View style={styles.quickStatsRow}>
-          <View style={styles.quickStat}>
-            <Text style={styles.quickStatNumber}>{todaysCompletedGoals}</Text>
-            <Text style={styles.quickStatLabel}>Goals Completed</Text>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={refreshGoals} />
+        }
+      >
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
           </View>
-          <View style={styles.quickStat}>
-            <Text style={styles.quickStatNumber}>{todaysTotalActions}</Text>
-            <Text style={styles.quickStatLabel}>Total Actions</Text>
-          </View>
-          {userRank && (
-            <View style={styles.quickStat}>
-              <Text style={styles.quickStatNumber}>#{userRank.rank}</Text>
-              <Text style={styles.quickStatLabel}>Weekly Rank</Text>
+        )}
+
+        {/* Notification Tester (only show in development) */}
+        {/*{showTester && <NotificationTester />}*/}
+
+        {/* Active Goals Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Active Goals</Text>
+          {activeGoals.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="flag-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyText}>No active goals</Text>
+              <Text style={styles.emptySubtext}>
+                Tap the edit button to add your first goal!
+              </Text>
             </View>
+          ) : (
+            activeGoals.map((goal) => (
+              <GoalItem
+                key={goal.id}
+                goal={goal}
+                onToggleTask={handleToggleTask}
+                onUpdateCount={handleUpdateCount}
+              />
+            ))
           )}
         </View>
-      </View>
 
-      {/* Goals List */}
-      <View style={styles.goalsContainer}>
-        <View style={styles.goalsHeader}>
-          <Text style={styles.sectionTitle}>Your Goals</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <Text style={styles.addButtonText}>+ Add Goal</Text>
-          </TouchableOpacity>
-        </View>
-
-        <FlatList
-          data={goals}
-          keyExtractor={(item) => item.id}
-          renderItem={renderGoal}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No goals yet!</Text>
-              <Text style={styles.emptySubtext}>Create your first goal to get started</Text>
-            </View>
-          }
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
-
-      {/* Leaderboard Preview */}
-      {weeklyLeaderboard && weeklyLeaderboard.entries.length > 0 && (
-        <View style={styles.leaderboardContainer}>
-          <Text style={styles.sectionTitle}>Weekly Leaderboard</Text>
-          {weeklyLeaderboard.entries.slice(0, 3).map((entry, index) => (
-            <View key={entry.user_id} style={styles.leaderboardItem}>
-              <Text style={styles.leaderboardRank}>#{entry.rank}</Text>
-              <Text style={styles.leaderboardName}>{entry.display_name}</Text>
-              <Text style={styles.leaderboardScore}>{entry.score} pts</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* Create Goal Modal */}
-      <Modal
-        visible={showCreateModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Create Goal</Text>
-            <TouchableOpacity onPress={handleCreateGoal}>
-              <Text style={styles.modalSave}>Save</Text>
-            </TouchableOpacity>
+        {/* Completed Goals Section */}
+        {completedGoals.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Completed Today</Text>
+            {completedGoals.map((goal) => (
+              <GoalItem
+                key={goal.id}
+                goal={goal}
+                onToggleTask={handleToggleTask}
+                onUpdateCount={handleUpdateCount}
+              />
+            ))}
           </View>
-
-          <View style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Goal Title</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Drink water, Take a walk"
-              value={newGoalTitle}
-              onChangeText={setNewGoalTitle}
-              autoFocus
-            />
-
-            <Text style={styles.inputLabel}>Icon</Text>
-            <View style={styles.iconRow}>
-              {['💧', '🚶', '📚', '🧘', '💪', '🥗'].map(icon => (
-                <TouchableOpacity
-                  key={icon}
-                  style={[
-                    styles.iconButton,
-                    newGoalIcon === icon && styles.iconButtonSelected
-                  ]}
-                  onPress={() => setNewGoalIcon(icon)}
-                >
-                  <Text style={styles.iconText}>{icon}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.inputLabel}>Goal Type</Text>
-            <View style={styles.typeRow}>
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  newGoalType === 'reminder' && styles.typeButtonSelected
-                ]}
-                onPress={() => setNewGoalType('reminder')}
-              >
-                <Text style={[
-                  styles.typeButtonText,
-                  newGoalType === 'reminder' && styles.typeButtonTextSelected
-                ]}>
-                  Simple Reminder
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.typeButton,
-                  newGoalType === 'counter' && styles.typeButtonSelected
-                ]}
-                onPress={() => setNewGoalType('counter')}
-              >
-                <Text style={[
-                  styles.typeButtonText,
-                  newGoalType === 'counter' && styles.typeButtonTextSelected
-                ]}>
-                  Daily Counter
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {newGoalType === 'counter' && (
-              <>
-                <Text style={styles.inputLabel}>Daily Target</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="8"
-                  value={newGoalTarget}
-                  onChangeText={setNewGoalTarget}
-                  keyboardType="number-pad"
-                />
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-    </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -332,93 +228,81 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: screenHeight * 0.02, // 2% of screen height
+    fontSize: screenWidth * 0.04, // 4% of screen width
+    color: '#666',
   },
   header: {
-    backgroundColor: 'white',
-    padding: 20,
-    paddingTop: 60,
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
+    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  quickStatsContainer: {
+    paddingHorizontal: screenWidth * 0.05, // 5% of screen width
+    paddingVertical: screenHeight * 0.02, // 2% of screen height
     backgroundColor: 'white',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    // Add extra top padding for devices with notches
+    paddingTop: screenHeight * 0.025, // 2.5% of screen height
+  },
+  title: {
+    fontSize: screenWidth * 0.06, // 6% of screen width
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  testButton: {
+    padding: screenWidth * 0.02, // 2% of screen width
+  },
+  editButton: {
+    padding: screenWidth * 0.02, // 2% of screen width
+  },
+  scrollView: {
+    flex: 1,
+  },
+  errorContainer: {
+    margin: screenWidth * 0.05, // 5% of screen width
+    padding: screenHeight * 0.02, // 2% of screen height
+    backgroundColor: '#fee',
+    borderRadius: 8,
+    borderColor: '#fcc',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#c33',
+    textAlign: 'center',
+    fontSize: screenWidth * 0.035, // 3.5% of screen width
+  },
+  section: {
+    marginTop: screenHeight * 0.025, // 2.5% of screen height
+    paddingHorizontal: screenWidth * 0.05, // 5% of screen width
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  quickStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  quickStat: {
-    alignItems: 'center',
-  },
-  quickStatNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#28a745',
-  },
-  quickStatLabel: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 4,
-  },
-  goalsContainer: {
-    flex: 1,
-    margin: 16,
-    marginTop: 0,
-  },
-  goalsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  addButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: 'white',
+    fontSize: screenWidth * 0.045, // 4.5% of screen width
     fontWeight: '600',
+    color: '#333',
+    marginBottom: screenHeight * 0.015, // 1.5% of screen height
   },
   goalItem: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: 'white',
+    padding: screenHeight * 0.02, // 2% of screen height
+    marginBottom: screenHeight * 0.01, // 1% of screen height
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  completedGoalItem: {
+    backgroundColor: '#f8f9fa',
   },
   goalInfo: {
     flexDirection: 'row',
@@ -426,155 +310,51 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   goalIcon: {
-    fontSize: 24,
-    marginRight: 12,
+    fontSize: screenWidth * 0.05, // 5% of screen width
+    marginRight: screenWidth * 0.03, // 3% of screen width
   },
-  goalText: {
+  goalName: {
+    fontSize: screenWidth * 0.04, // 4% of screen width
+    fontWeight: '500',
+    color: '#333',
     flex: 1,
   },
-  goalTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+  completedGoalName: {
+    color: '#666',
+    textDecorationLine: 'line-through',
   },
-  goalProgress: {
-    fontSize: 14,
-    fontWeight: '500',
+  checkboxContainer: {
+    padding: screenWidth * 0.01, // 1% of screen width
   },
-  actionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  emptyContainer: {
+  incrementalControls: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 40,
+    gap: screenWidth * 0.03, // 3% of screen width
+  },
+  incrementalButton: {
+    padding: screenWidth * 0.01, // 1% of screen width
+  },
+  countText: {
+    fontSize: screenWidth * 0.04, // 4% of screen width
+    fontWeight: '600',
+    color: '#333',
+    minWidth: screenWidth * 0.1, // 10% of screen width
+    textAlign: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: screenHeight * 0.05, // 5% of screen height
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: screenWidth * 0.045, // 4.5% of screen width
+    fontWeight: '500',
     color: '#666',
+    marginTop: screenHeight * 0.02, // 2% of screen height
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: screenWidth * 0.035, // 3.5% of screen width
     color: '#999',
-    marginTop: 8,
-  },
-  leaderboardContainer: {
-    backgroundColor: 'white',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-  },
-  leaderboardItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  leaderboardRank: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    width: 40,
-  },
-  leaderboardName: {
-    fontSize: 14,
-    flex: 1,
-  },
-  leaderboardScore: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#28a745',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'white',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  modalCancel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  modalSave: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  modalContent: {
-    padding: 16,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 16,
-  },
-  iconRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  iconButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconButtonSelected: {
-    backgroundColor: '#007AFF',
-  },
-  iconText: {
-    fontSize: 24,
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  typeButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
-  },
-  typeButtonSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  typeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  typeButtonTextSelected: {
-    color: 'white',
+    marginTop: screenHeight * 0.01, // 1% of screen height
+    textAlign: 'center',
   },
 });

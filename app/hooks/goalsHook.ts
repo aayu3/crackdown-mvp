@@ -1,246 +1,194 @@
-// app/hooks/useGoals.ts
+// app/hooks/goalsHook.ts
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { goalService } from '../services/goalsService';
-import {
-    CreateGoalInput,
-    Goal,
-    GoalLog,
-    UpdateGoalInput,
-    UserProfile,
-    WeeklyLeaderboard,
-} from '../types/goals';
+import { goalsService } from '../services/goalsService';
+import { DayOfWeek, Goal, GoalNotificationFrequency, GoalNotificationTimes, GoalType } from '../types/goals';
 
-export interface UseGoalsReturn {
-  // Goals data
-  goals: Goal[];
-  todaysLogs: GoalLog[];
-  
-  // Leaderboard
-  weeklyLeaderboard: WeeklyLeaderboard | null;
-  userRank: {
-    rank: number;
-    goalsCompleted: number;
-    totalActions: number;
-    activeDays: number;
-    totalParticipants: number;
-    score: number;
-  } | null;
-  
-  // User profile
-  userProfile: UserProfile | null;
-  
-  // Derived stats
-  todaysCompletedGoals: number;
-  todaysTotalActions: number;
-  weeklyStats: {
-    goalsCompleted: number;
-    actionsLogged: number;
-    currentStreak: number;
-  };
-  
-  // State
-  loading: boolean;
-  error: string | null;
-  
-  // Actions
-  createGoal: (goalData: CreateGoalInput) => Promise<string>;
-  updateGoal: (goalId: string, updates: UpdateGoalInput) => Promise<void>;
-  completeReminder: (goalId: string, note?: string) => Promise<void>;
-  incrementCounter: (goalId: string, amount?: number, note?: string) => Promise<void>;
-  refreshData: () => Promise<void>;
-}
-
-export const useGoals = (realTime: boolean = true): UseGoalsReturn => {
-  const { user, userProfile } = useAuth();
-  
+export const useGoals = () => {
+  const { user, isLoggedIn } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [todaysLogs, setTodaysLogs] = useState<GoalLog[]>([]);
-  const [weeklyLeaderboard, setWeeklyLeaderboard] = useState<WeeklyLeaderboard | null>(null);
-  const [userRank, setUserRank] = useState<{
-    rank: number;
-    goalsCompleted: number;
-    totalActions: number;
-    activeDays: number;
-    totalParticipants: number;
-    score: number;
-  } | null>(null);
-  
+  const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
+  const [completedGoals, setCompletedGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Derived values
-  const todaysCompletedGoals = goals.filter(goal => {
-    if (goal.type === 'reminder') {
-      return goal.current_count >= 1;
-    } else {
-      return goal.current_count >= (goal.daily_target || 1);
+  // Load goals from Firebase
+  const loadGoals = useCallback(async () => {
+    if (!user?.uid) {
+      setGoals([]);
+      setActiveGoals([]);
+      setCompletedGoals([]);
+      setLoading(false);
+      return;
     }
-  }).length;
-
-  const todaysTotalActions = todaysLogs.length;
-
-  const weeklyStats = {
-    goalsCompleted: userProfile?.weekly_goals_completed || 0,
-    actionsLogged: userProfile?.weekly_actions_logged || 0,
-    currentStreak: userProfile?.current_weekly_streak || 0,
-  };
-
-  // Load all data
-  const loadData = useCallback(async () => {
-    if (!user) return;
 
     try {
       setLoading(true);
       setError(null);
-
-      // Load leaderboard
-      const leaderboard = await goalService.getWeeklyLeaderboard();
-      setWeeklyLeaderboard(leaderboard);
-
-      // Load user rank
-      const rank = await goalService.getUserWeeklyRank(user.uid);
-      setUserRank(rank);
-
-      // Load goals and logs if not using real-time
-      if (!realTime) {
-        const userGoals = await goalService.getUserGoals(user.uid, 'active');
-        setGoals(userGoals);
-        
-        const logs = await goalService.getTodaysGoalLogs(user.uid);
-        setTodaysLogs(logs);
-      }
-
+      
+      const userGoals = await goalsService.getUserGoals(user.uid);
+      setGoals(userGoals);
+      
+      // Separate active and completed goals
+      const active = userGoals.filter(goal => goal.active && !goal.completed);
+      const completed = userGoals.filter(goal => goal.active && goal.completed);
+      
+      setActiveGoals(active);
+      setCompletedGoals(completed);
     } catch (err) {
-      console.error('Error loading goals data:', err);
-      setError('Failed to load goals data');
+      console.error('Error loading goals:', err);
+      setError('Failed to load goals');
     } finally {
       setLoading(false);
     }
-  }, [user, realTime]);
+  }, [user?.uid]);
 
-  // Set up real-time listeners
+  // Load goals when user changes or component mounts
   useEffect(() => {
-    if (!user || !realTime) return;
+    if (isLoggedIn) {
+      loadGoals();
+    }
+  }, [isLoggedIn, loadGoals]);
 
-    const unsubscribeGoals = goalService.onUserGoalsChange(user.uid, (userGoals) => {
-      setGoals(userGoals);
-      setLoading(false);
-    });
-
-    const unsubscribeLogs = goalService.onTodaysLogsChange(user.uid, (logs) => {
-      setTodaysLogs(logs);
-    });
-
-    return () => {
-      unsubscribeGoals();
-      unsubscribeLogs();
-    };
-  }, [user, realTime]);
-
-  // Load data when user changes
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Create goal
-  const createGoal = useCallback(async (goalData: CreateGoalInput): Promise<string> => {
-    if (!user) throw new Error('User not authenticated');
+  // Create a new goal
+  const createGoal = useCallback(async (goalData: {
+    goal_name: string;
+    goal_type: GoalType;
+    target_count: number | null;
+    icon?: string;
+    repeat: DayOfWeek[];
+    daily_reminders?: GoalNotificationFrequency;
+    notification_times?: GoalNotificationTimes[];
+  }) => {
+    if (!user?.uid) throw new Error('User not authenticated');
 
     try {
-      const goalId = await goalService.createGoal(user.uid, goalData);
-      
-      if (!realTime) {
-        await loadData();
-      }
-      
+      setError(null);
+      const goalId = await goalsService.createGoal(user.uid, goalData);
+      await loadGoals(); // Refresh the goals list
       return goalId;
     } catch (err) {
       console.error('Error creating goal:', err);
+      setError('Failed to create goal');
       throw err;
     }
-  }, [user, realTime, loadData]);
+  }, [user?.uid, loadGoals]);
 
-  // Update goal
-  const updateGoal = useCallback(async (goalId: string, updates: UpdateGoalInput): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
+  // Update a goal
+  const updateGoal = useCallback(async (
+    goalId: string,
+    updates: Partial<Omit<Goal, 'id' | 'user_id' | 'created_date'>>
+  ) => {
+    if (!user?.uid) throw new Error('User not authenticated');
 
     try {
-      await goalService.updateGoal(user.uid, goalId, updates);
-      
-      if (!realTime) {
-        await loadData();
-      }
+      setError(null);
+      await goalsService.updateGoal(user.uid, goalId, updates);
+      await loadGoals(); // Refresh the goals list
     } catch (err) {
       console.error('Error updating goal:', err);
+      setError('Failed to update goal');
       throw err;
     }
-  }, [user, realTime, loadData]);
+  }, [user?.uid, loadGoals]);
 
-  // Complete reminder goal
-  const completeReminder = useCallback(async (goalId: string, note?: string): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
+  // Toggle task completion
+  const toggleTaskCompletion = useCallback(async (goalId: string) => {
+    if (!user?.uid) throw new Error('User not authenticated');
 
     try {
-      await goalService.completeReminderGoal(user.uid, goalId);
-      
-      if (!realTime) {
-        await loadData();
-      }
+      setError(null);
+      await goalsService.toggleTaskCompletion(user.uid, goalId);
+      await loadGoals(); // Refresh the goals list
     } catch (err) {
-      console.error('Error completing reminder:', err);
+      console.error('Error toggling task completion:', err);
+      setError('Failed to update task');
       throw err;
     }
-  }, [user, realTime, loadData]);
+  }, [user?.uid, loadGoals]);
 
-  // Increment counter goal
-  const incrementCounter = useCallback(async (goalId: string, amount: number = 1, note?: string): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
+  // Update incremental goal count
+  const updateIncrementalCount = useCallback(async (goalId: string, newCount: number) => {
+    if (!user?.uid) throw new Error('User not authenticated');
 
     try {
-      await goalService.incrementCounterGoal(user.uid, goalId, amount);
-      
-      if (!realTime) {
-        await loadData();
-      }
+      setError(null);
+      await goalsService.updateIncrementalCount(user.uid, goalId, newCount);
+      await loadGoals(); // Refresh the goals list
     } catch (err) {
-      console.error('Error incrementing counter:', err);
+      console.error('Error updating incremental count:', err);
+      setError('Failed to update count');
       throw err;
     }
-  }, [user, realTime, loadData]);
+  }, [user?.uid, loadGoals]);
 
-  // Refresh all data
-  const refreshData = useCallback(async (): Promise<void> => {
-    await loadData();
-  }, [loadData]);
+  // Delete a goal
+  const deleteGoal = useCallback(async (goalId: string) => {
+    if (!user?.uid) throw new Error('User not authenticated');
+
+    try {
+      setError(null);
+      await goalsService.deleteGoal(user.uid, goalId);
+      await loadGoals(); // Refresh the goals list
+    } catch (err) {
+      console.error('Error deleting goal:', err);
+      setError('Failed to delete goal');
+      throw err;
+    }
+  }, [user?.uid, loadGoals]);
+
+  // Deactivate a goal
+  const deactivateGoal = useCallback(async (goalId: string) => {
+    if (!user?.uid) throw new Error('User not authenticated');
+
+    try {
+      setError(null);
+      await goalsService.deactivateGoal(user.uid, goalId);
+      await loadGoals(); // Refresh the goals list
+    } catch (err) {
+      console.error('Error deactivating goal:', err);
+      setError('Failed to deactivate goal');
+      throw err;
+    }
+  }, [user?.uid, loadGoals]);
+
+  // Reactivate a goal
+  const reactivateGoal = useCallback(async (goalId: string) => {
+    if (!user?.uid) throw new Error('User not authenticated');
+
+    try {
+      setError(null);
+      await goalsService.reactivateGoal(user.uid, goalId);
+      await loadGoals(); // Refresh the goals list
+    } catch (err) {
+      console.error('Error reactivating goal:', err);
+      setError('Failed to reactivate goal');
+      throw err;
+    }
+  }, [user?.uid, loadGoals]);
+
+  // Refresh goals manually
+  const refreshGoals = useCallback(() => {
+    loadGoals();
+  }, [loadGoals]);
 
   return {
-    // Goals data
+    // Data
     goals,
-    todaysLogs,
-    
-    // Leaderboard
-    weeklyLeaderboard,
-    userRank,
-    
-    // User profile
-    userProfile,
-    
-    // Derived stats
-    todaysCompletedGoals,
-    todaysTotalActions,
-    weeklyStats,
-    
-    // State
+    activeGoals,
+    completedGoals,
     loading,
     error,
     
     // Actions
     createGoal,
     updateGoal,
-    completeReminder,
-    incrementCounter,
-    refreshData,
+    toggleTaskCompletion,
+    updateIncrementalCount,
+    deleteGoal,
+    deactivateGoal,
+    reactivateGoal,
+    refreshGoals,
   };
 };

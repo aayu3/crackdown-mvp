@@ -10,7 +10,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 // Inner component that has access to AuthContext
 function AppNavigator() {
   const colorScheme = useColorScheme();
-  const { loggedIn, loading } = useAuth();
+  const { isLoggedIn, loading } = useAuth();
   const router = useRouter();
 
   const [loaded] = useFonts({
@@ -26,11 +26,11 @@ function AppNavigator() {
 
 
   useEffect(() => {
-    if (loaded && !loading && !loggedIn) {
+    if (loaded && !loading && !isLoggedIn) {
       router.replace('/(auth)/login');
     }
 
-  }, [loggedIn, loaded, loading, router]);
+  }, [isLoggedIn, loaded, loading, router]);
 
   if (!loaded || loading) {
     return null;
@@ -41,6 +41,7 @@ function AppNavigator() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(goals)/edit" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
